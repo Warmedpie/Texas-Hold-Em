@@ -166,8 +166,8 @@ io.sockets.on('connection', function(socket){
 });
 
 function new_game() {
-	//make sure more than one person is playing
-	if (player_count > 1) {
+	//make sure more than one person is playing, and game is not running
+	if (player_count > 1 && ingame === false) {
 		//Create deck
 		deck = deckModule.generate_deck();
 		river = [];
@@ -207,7 +207,7 @@ function new_game() {
 		on_update();
 	}
 	//if one player is playing, we do not start a new game
-	else {
+	else if (player_count <= 1) {
 		ingame = false;
 	}
 }
@@ -320,7 +320,10 @@ function show_cards() {
     }
 	
 	//After 7 seconds, start a new hand
-	setTimeout(function() { new_game(); }, 7000);
+	setTimeout(function() { 
+		ingame = false;
+		new_game(); 
+	}, 7000);
 	
 }
 
