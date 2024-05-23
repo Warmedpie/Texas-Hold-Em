@@ -1,0 +1,251 @@
+<head>
+	<script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+	<script src="img/deck.js"></script>
+	<script src="img/ranks.js"></script>
+
+	<style>
+	
+	body {
+		background-color: coral;
+	}
+	
+	#wrapper { 
+		display: flex; 
+		justify-content: center; /* center horizontally */ 
+		align-items: center; /* center vertically */ 
+	} 
+	</style>
+
+</head>
+
+<body>
+
+	<div id="wrapper">
+		<canvas id="game" width="1280" height="720"></canvas>
+	</div>
+
+	<div style="display:none;">
+		<img id="card-image" width="1053" height="587" src="img/cards.png">
+	</div>
+	
+	<div style="display:none;">
+		<img id="table-image" width="933" height="468" src="img/table.png">
+	</div>
+
+	<script>
+
+		//game info
+		var pot = 0;
+		var money = 10;
+		var denom = 10;
+		var myTurn = false;
+
+		//socketio info
+		var socket = io();
+		var id;
+		
+		//Get your ID from the client
+		socket.on('id',function(data) { 
+			id = data.id;
+		});
+		
+		var player_info = [];
+		var player_count = 1;
+		socket.on('game_info',function(data) {
+			player_info = [];
+			for (i in data) {
+				player_info.push({});
+				
+				player_info[i].id = data[i].id;
+				player_info[i].money = data[i].money;
+				player_info[i].isturn = data[i].isturn;
+				player_info[i].seat = data[i].seat;
+				player_info[i].cards = [new card(4,1), new card(4,1)];
+				
+				if (id == data[i].id) {
+					player_info[i].cards = data[i].cards;
+					money = data[i].money;
+					cards = data[i].cards;
+					river = data[i].river;
+					pot = data[i].pot;
+					status_message = data[i].status_message;
+					call_amount = Number(data[i].needed_bet) - Number(data[i].amount_bet);
+					if (data[i].isturn) myTurn = true;
+					else myTurn = false;
+				}
+			}
+		});	
+		
+		socket.on('post-game_info',function(data) {
+			player_info = [];
+			for (i in data) {
+				player_info.push({});
+				
+				player_info[i].id = data[i].id;
+				player_info[i].money = data[i].money;
+				player_info[i].isturn = data[i].isturn;
+				player_info[i].seat = data[i].seat;
+				player_info[i].cards = data[i].cards;
+				
+				if (id == data[i].id) {
+					player_info[i].cards = data[i].cards;
+					money = data[i].money;
+					cards = data[i].cards;
+					river = data[i].river;
+					pot = data[i].pot;
+					status_message = data[i].status_message;
+					call_amount = Number(data[i].needed_bet) - Number(data[i].amount_bet);
+					if (data[i].isturn) myTurn = true;
+					else myTurn = false;
+				}
+			}
+		});
+
+		//Canvas info
+		const canvas = document.getElementById("game");
+		const ctx = canvas.getContext("2d");
+		
+		//Card sprite
+		const image = document.getElementById("card-image");
+		const table = document.getElementById("table-image");
+		
+		//Rule image
+		var rules = null;
+		
+		//additional message
+		var status_message = "";
+		
+		//Cards, what you're holding, and bet amount
+		var cards = [];
+		var deck = [];
+		var holding = [];
+		var bet = 0;
+		var call_amount = 0;
+		
+		//Function used for handling mouse clicks
+		function clickAndPlay(canvas, event) {
+			let rect = canvas.getBoundingClientRect();
+			let x = event.clientX - rect.left;
+			let y = event.clientY - rect.top;
+			
+				if (myTurn) {
+					console.log(x);
+					if (y > 150 && y < 150 + 95) {
+						//call/check
+						if (x > 350 && x < 350 + 175) {
+							if (money >= call_amount) {
+								data = {id:Number(id),bet:Number(call_amount)};
+								socket.emit('bet', data);
+							}
+							else {
+								data = {id:Number(id),bet:Number(money)};
+								socket.emit('bet', data);
+							}
+						}
+						else if (x > 550 && x < 550 + 175) {
+							if (money >= call_amount + denom) {
+								data = {id:Number(id),bet:Number(call_amount + denom)};
+								socket.emit('bet',data);
+							}
+						}
+						else if (x > 750 && x < 750 + 175) {
+							data = {id:Number(id),bet:Number(99999)};
+							socket.emit('bet',data);
+						}
+					}
+				}
+				
+				if (y > 252 + 356 && y < 252 + 356 + 49) {
+					//$10
+					if (x > 173 + 737 && x < 173 + 737 + 49) {
+						denom = 10;
+					}
+					//$100
+					if (x > 173 + 805 && x < 173 + 805 + 49) {
+						denom = 100;
+					}
+					//$ALL IN
+					if (x > 173 + 869 && x < 173 + 869 + 49) {
+						denom = money - call_amount;
+					}
+				}
+				if (y > 252 + 411 && y < 252 + 411 + 49) {
+					//$50
+					if (x > 173 + 737 && x < 173 + 737 + 49) {
+						denom = 50;
+					}
+					//$500
+					if (x > 173 + 805 && x < 173 + 805 + 49) {
+						denom = 500;
+					}
+					//$HAALF
+					if (x > 173 + 869 && x < 173 + 869 + 49) {
+						denom = denom / 2;
+					}
+				}
+		}
+		
+		//Mouse press event
+		let canvasElem = document.querySelector("canvas");
+		canvasElem.addEventListener("mousedown", function (e) {
+			clickAndPlay(canvasElem, e);
+		}); 
+		
+		//Update loop
+		setInterval(function () {
+			//Clear canvas
+			ctx.clearRect(0,0,1280,720);
+			
+			//Fill background
+			ctx.fillStyle = "coral";
+			ctx.fillRect(0,0,1280,720);
+			
+			//Draw text info
+			ctx.fillStyle = "black";
+			ctx.font = "20px Arial";
+			
+			ctx.drawImage(table, 173, 252);
+			ctx.fillText("$" + money + " (" + denom + ")", 173 + 245, 252 + 357);
+			
+			if (cards.length > 0) {	
+				
+				for (i in cards) {
+					draw_card(ctx, image, cards[i], 540 + (i*90), 590);
+				}
+				
+				for (i in river) {
+					draw_card(ctx, image, river[i], 420 + (i*90), 440);
+				}
+				
+				for (i in player_info) {
+					if (player_info[i].cards.length != 0) {
+						draw_card_small(ctx, image, player_info[i].cards[0], 245 + (i*120), 270);
+						draw_card_small(ctx, image, player_info[i].cards[1], 245 + (i*120) + 20, 270);
+						ctx.fillText("$" + player_info[i].money, 173 + 70 + (i*120), 252 + 100);
+					}
+				}
+				
+				ctx.fillText(status_message, 250 , 100);
+
+				if (myTurn) {
+					
+					ctx.fillStyle = "blue";
+					ctx.fillRect(350,150,175,95);
+					ctx.fillStyle = "green";
+					ctx.fillRect(550,150,175,95);
+					ctx.fillStyle = "red";
+					ctx.fillRect(750,150,175,95);
+					
+					ctx.fillStyle = "black";
+					ctx.fillText("Call/Check"            , 350 ,150 + 95/2);
+					ctx.fillText("(" + call_amount + "$)", 350 ,180 + 95/2);
+					ctx.fillText("Raise"				 , 550 ,150 + 95/2);
+					ctx.fillText("(" + (Number(Number(call_amount) + Number(denom))) + "$)", 550 , 180 + 95/2);
+					ctx.fillText("Fold"                  , 750 ,150 + 95/2);
+				}
+				
+			}
+		}, 1000 / 12);
+
+	</script>
+</body>
